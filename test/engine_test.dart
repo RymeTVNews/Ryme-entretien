@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'package:ryme_entretien/catalog.dart';
 import 'package:ryme_entretien/engine.dart';
 import 'package:ryme_entretien/models.dart';
@@ -26,6 +27,10 @@ Vehicle _car({int odo = 50000, DateTime? acquired}) {
 
 void main() {
   final now = DateTime(2026, 1, 15);
+
+  setUpAll(() async {
+    await initializeDateFormatting('fr');
+  });
 
   test('un véhicule électrique n\'a pas de vidange', () {
     final items = buildSchedule(
