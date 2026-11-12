@@ -1,5 +1,4 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:timezone/data/latest_all.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 
@@ -34,12 +33,7 @@ class NotificationService {
 
   static Future<void> init() async {
     tzdata.initializeTimeZones();
-    try {
-      final name = await FlutterTimezone.getLocalTimezone();
-      tz.setLocalLocation(tz.getLocation(name));
-    } catch (_) {
-      // Repli : fuseau UTC du paquet timezone.
-    }
+    tz.setLocalLocation(_detectLocation());
     const android = AndroidInitializationSettings('@mipmap/ic_launcher');
     const ios = DarwinInitializationSettings(
       requestAlertPermission: false,
@@ -48,6 +42,40 @@ class NotificationService {
     );
     await _plugin.initialize(
         const InitializationSettings(android: android, iOS: ios));
+  }
+
+  /// Trouve un fuseau de la base IANA dont les décalages (hiver, été, etc.)
+  /// correspondent à ceux de l'appareil, sans dépendre d'un plugin natif.
+  static tz.Location _detectLocation() {
+    final now = DateTime.now();
+    final samples = [
+      for (final m in [1, 4, 7, 10]) DateTime(now.year, m, 15, 12),
+    ];
+    final offsets = [for (final d in samples) d.timeZoneOffset];
+    const preferred = [
+      'America/', 'Europe/', 'Asia/', 'Africa/', 'Australia/', 'Pacific/',
+      'Atlantic/', 'Indian/',
+    ];
+    final names = tz.timeZoneDatabase.locations.keys.toList()..sort();
+    tz.Location? best;
+    for (final name in names) {
+      if (!preferred.any(name.startsWith)) continue;
+      final loc = tz.timeZoneDatabase.locations[name]!;
+      var ok = true;
+      for (var i = 0; i < samples.length; i++) {
+        final s = samples[i];
+        final t = tz.TZDateTime(loc, s.year, s.month, s.day, s.hour);
+        if (t.timeZoneOffset != offsets[i]) {
+          ok = false;
+          break;
+        }
+      }
+      if (ok) {
+        best = loc;
+        break;
+      }
+    }
+    return best ?? tz.UTC;
   }
 
   /// Demande l'autorisation d'afficher des notifications.

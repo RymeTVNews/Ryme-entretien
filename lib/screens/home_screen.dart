@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../engine.dart';
@@ -217,6 +218,28 @@ class _HistoryTab extends StatefulWidget {
 class _HistoryTabState extends State<_HistoryTab> {
   String? _vehicleId;
 
+  void _showCsv(BuildContext context, String csv) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Export CSV'),
+        content: SingleChildScrollView(child: SelectableText(csv)),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Fermer')),
+          FilledButton(
+            onPressed: () async {
+              await Clipboard.setData(ClipboardData(text: csv));
+              if (ctx.mounted) Navigator.pop(ctx);
+            },
+            child: const Text('Copier'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
@@ -251,7 +274,7 @@ class _HistoryTabState extends State<_HistoryTab> {
                 icon: const Icon(Icons.ios_share),
                 onPressed: recs.isEmpty
                     ? null
-                    : () => state.exportCsv(vehicleId),
+                    : () => _showCsv(context, state.buildCsv(vehicleId)),
               ),
             ],
           ),

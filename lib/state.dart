@@ -1,9 +1,6 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'catalog.dart';
@@ -196,7 +193,7 @@ class AppState extends ChangeNotifier {
 
   // ---- Export -------------------------------------------------------------
 
-  Future<void> exportCsv(String? vehicleId) async {
+  String buildCsv(String? vehicleId) {
     String esc(String? s) {
       final v = (s ?? '').replaceAll('"', '""');
       return '"$v"';
@@ -218,10 +215,6 @@ class AppState extends ChangeNotifier {
         esc(r.notes),
       ].join(','));
     }
-    final dir = await getTemporaryDirectory();
-    final file = File('${dir.path}/historique_entretien.csv');
-    await file.writeAsString('﻿$b');
-    await Share.shareXFiles([XFile(file.path)],
-        subject: "Historique d'entretien");
+    return b.toString();
   }
 }

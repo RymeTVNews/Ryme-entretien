@@ -8,7 +8,7 @@ Application de rappels d'entretien automobile par notifications automatiques.
 - **Suivi par kilométrage ET par date** : chaque entretien est dû au premier des deux critères atteint. La date d'un entretien basé sur le kilométrage est estimée à partir de votre rythme réel (historique du compteur) ou de votre usage annuel déclaré.
 - **Onglet « À faire »** : entretiens en retard, à prévoir bientôt, et à venir.
 - **Validation d'un entretien** (date, kilométrage, coût, garage, notes) : l'échéance suivante est recalculée automatiquement. Possibilité de déclarer un entretien déjà effectué.
-- **Historique** par véhicule, coût total, suppression, **export CSV**.
+- **Historique** par véhicule, coût total, suppression, **export CSV (copie dans le presse-papiers)**.
 - **Notifications locales** (sans serveur) : préavis en jours et en km configurables, heure choisie, rappel hebdomadaire tant qu'un entretien est en retard, rappel mensuel de mise à jour du compteur, rappels de pneus saisonniers (optionnels), reprogrammation à chaque modification et après redémarrage du téléphone.
 - Unités **km / mi**, thème clair/sombre automatique, données stockées localement.
 
