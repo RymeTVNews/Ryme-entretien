@@ -1,0 +1,11 @@
+.dart_tool/
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+pubspec.lock
+*.iml
+.idea/
+# Générés par tool/setup_platforms.py (peuvent être versionnés si vous le souhaitez)
+android/
+ios/
