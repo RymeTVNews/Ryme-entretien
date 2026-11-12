@@ -21,6 +21,11 @@ if not (ROOT / "android").exists() or not (ROOT / "ios").exists():
         cwd=ROOT,
     )
 
+# Le test d'exemple généré par flutter create référence « MyApp » : on le retire.
+sample_test = ROOT / "test/widget_test.dart"
+if sample_test.exists():
+    sample_test.unlink()
+
 # ---------------------------------------------------------------- Android --
 manifest = ROOT / "android/app/src/main/AndroidManifest.xml"
 m = manifest.read_text(encoding="utf-8")
