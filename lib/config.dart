@@ -8,9 +8,14 @@ class AppConfig {
   /// Durée de l'essai gratuit, comptée depuis la création du compte.
   static const int trialDays = 7;
 
-  /// Identifiant du produit à achat unique créé dans Play Console
-  /// (Monétiser → Produits → Produits uniques). Prix de base : 5,00 CAD.
-  static const String productId = 'ryme_entretien_premium';
+  /// Identifiant de l'ABONNEMENT annuel créé dans Play Console
+  /// (Monétiser → Produits → Abonnements). Forfait de base annuel,
+  /// renouvellement automatique, prix de base : 5,00 CAD par an.
+  static const String productId = 'ryme_entretien_annuel';
+
+  /// Si Google Play n'a pas pu être interrogé (hors ligne), la dernière
+  /// confirmation d'abonnement actif reste valable ce nombre de jours.
+  static const int entitlementGraceDays = 7;
 
   static const String firebaseApiKey =
       String.fromEnvironment('FIREBASE_API_KEY');

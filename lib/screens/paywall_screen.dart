@@ -30,7 +30,7 @@ class PaywallScreen extends StatelessWidget {
             const SizedBox(height: 16),
             Text(
               unlocked
-                  ? 'Merci ! Ryme entretien est débloqué.'
+                  ? 'Merci ! Votre abonnement est actif.'
                   : (canClose
                       ? 'Débloquez Ryme entretien'
                       : 'Votre essai gratuit est terminé'),
@@ -40,9 +40,9 @@ class PaywallScreen extends StatelessWidget {
             const SizedBox(height: 12),
             if (!unlocked) ...[
               const Text(
-                "Un seul paiement, sans abonnement : accès illimité à tous "
-                "les véhicules, aux rappels automatiques et à l'historique "
-                "d'entretien. Vos données sont conservées.",
+                "Abonnement annuel : accès illimité à tous les véhicules, aux "
+                "rappels automatiques et à l'historique d'entretien. Vos "
+                "données sont conservées.",
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 24),
@@ -55,12 +55,16 @@ class PaywallScreen extends StatelessWidget {
                         access.product?.price ?? '5,00 \$ CA',
                         style: Theme.of(context).textTheme.displaySmall,
                       ),
-                      const Text('paiement unique'),
+                      const Text('par an'),
                       const SizedBox(height: 8),
                       Text(
-                        'Prix de base : 5,00 \$ CA. Hors du Canada, Google Play '
-                        'affiche le prix converti dans votre devise selon le '
-                        'taux de change en vigueur.',
+                        "Prix de base : 5,00 \$ CA par an. Hors du Canada, Google "
+                        "Play affiche le prix converti dans votre devise selon "
+                        "le taux de change en vigueur. L'abonnement est facturé "
+                        "à la souscription, puis chaque année, et se renouvelle "
+                        "automatiquement jusqu'à son annulation. Annulation à "
+                        "tout moment dans Google Play → Paiements et "
+                        "abonnements → Abonnements.",
                         style: Theme.of(context).textTheme.bodySmall,
                         textAlign: TextAlign.center,
                       ),
@@ -77,7 +81,7 @@ class PaywallScreen extends StatelessWidget {
                         width: 18,
                         child: CircularProgressIndicator(strokeWidth: 2))
                     : const Icon(Icons.credit_card),
-                label: const Text('Acheter'),
+                label: const Text("S'abonner"),
               ),
               const SizedBox(height: 4),
               Text(
@@ -87,7 +91,7 @@ class PaywallScreen extends StatelessWidget {
               ),
               TextButton(
                 onPressed: access.busy ? null : access.restore,
-                child: const Text('Restaurer mon achat'),
+                child: const Text('Restaurer mon abonnement'),
               ),
               if (!access.storeAvailable || access.product == null)
                 Padding(

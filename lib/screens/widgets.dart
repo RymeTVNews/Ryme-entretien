@@ -239,7 +239,7 @@ class TrialBanner extends StatelessWidget {
                 MaterialPageRoute(
                     builder: (_) => const PaywallScreen(canClose: true)),
               ),
-              child: const Text('Acheter'),
+              child: const Text("S'abonner"),
             ),
           ],
         ),

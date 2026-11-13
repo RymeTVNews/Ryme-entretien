@@ -16,7 +16,7 @@ Application de rappels d'entretien automobile par notifications automatiques.
 Aucun fabricant ne fournit de base de données ouverte et gratuite de ses calendriers d'entretien pour chaque modèle et chaque année. L'application utilise donc des **intervalles indicatifs par marque** (`lib/catalog.dart`), affichés avec un avertissement et toujours modifiables. Pour un calendrier exact par modèle, ajoutez les valeurs du manuel officiel dans `kModelOverrides` (format documenté dans le fichier), ou branchez une source de données sous licence.
 
 ## Mise en ligne sur Google Play
-Voir **PLAY_STORE.md** (essai de 7 jours, achat unique de 5 $ CA, connexion courriel/téléphone, signature, Firebase). Notes techniques : **NOTES_PROJET.md**.
+Voir **PLAY_STORE.md** (essai de 7 jours, abonnement annuel de 5 $ CA, compte par courriel, signature, Firebase). Notes techniques : **NOTES_PROJET.md**.
 
 ## Compiler
 Prérequis : Flutter (stable), Android Studio / Xcode.

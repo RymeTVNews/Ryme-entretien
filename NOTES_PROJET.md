@@ -24,8 +24,8 @@ lib/engine.dart         computeDue : échéances (km + date), statuts, kmPerDay,
 lib/notifications.dart  buildPlan (plan de notifications) + NotificationService (local)
 lib/state.dart          AppState (ChangeNotifier), stockage, replan(), export CSV (texte), eraseAll()
 lib/config.dart         durée d'essai (7 j), id du produit, valeurs Firebase/liens via --dart-define
-lib/access.dart         AccessController : connexion Firebase, essai, achat Google Play, suppression de compte
-lib/screens/auth_screen.dart, paywall_screen.dart   connexion (courriel / SMS) et achat unique
+lib/access.dart         AccessController : compte Firebase (courriel), essai, abonnement Google Play, suppression de compte
+lib/screens/auth_screen.dart, paywall_screen.dart   compte par courriel et abonnement annuel
 PLAY_STORE.md           guide complet de mise en ligne (Play Console, Firebase, signature, secrets)
 docs/                   modèles HTML : politique de confidentialité, suppression de compte
 lib/util.dart           unités km/mi, formats, addMonths
@@ -44,16 +44,17 @@ tool/setup_platforms.py génération android/ios + réglages natifs
 - **Unités** : tout est stocké en km ; conversion à l'affichage et à la saisie (`toDisplayDist`, `fromDisplayDist`).
 - **Langue** : interface en français seulement (locale `fr` initialisée dans `main.dart`). Les tests doivent appeler `initializeDateFormatting('fr')`.
 
-## 4 bis. Modèle économique et accès (ajouté le 2026-11-12)
-- **Décision** : application gratuite à télécharger + produit à achat unique `ryme_entretien_premium` à 5,00 CAD (Google Play Billing) ; essai de 7 jours compté dans l'application depuis la création du compte. Raison : Google Play ne permet les essais gratuits que pour les abonnements.
-- **Connexion obligatoire** (Firebase Authentication : courriel + mot de passe, ou code SMS). L'essai démarre à `user.metadata.creationTime` (heure serveur), donc il survit à une réinstallation.
-- **Règle d'accès** (`decideAccess`, testée) : non connecté → écran de connexion ; connecté + achat → accès ; connecté sans achat et < 7 jours → essai (bandeau) ; sinon écran d'achat bloquant. Notifications coupées quand l'accès est bloqué (`AppState.allowNotifications`).
+## 4 bis. Modèle économique et accès (mis à jour le 2026-11-13)
+- **Décision** : application gratuite à télécharger + **abonnement annuel** `ryme_entretien_annuel` (forfait de base `annuel`, renouvellement automatique) à **5,00 CAD par an** (Google Play Billing) ; essai de 7 jours compté dans l'application depuis la création du compte (sans carte). Historique : une première version prévoyait un achat unique de 5 $ ; remplacée par l'abonnement annuel à la demande de l'utilisateur.
+- **Compte par courriel seulement** (Firebase Authentication, courriel + mot de passe ; connexion par téléphone retirée → plus besoin du forfait Firebase Blaze ni des empreintes SHA). L'essai démarre à `user.metadata.creationTime` (heure serveur), donc il survit à une réinstallation.
+- **Règle d'accès** (`decideAccess`, testée) : non connecté → écran de connexion ; connecté + abonnement actif → accès ; connecté sans abonnement et < 7 jours → essai (bandeau) ; sinon écran d'abonnement bloquant. Notifications coupées quand l'accès est bloqué (`AppState.allowNotifications`).
+- **Abonnement actif** (`entitlementValid`, testée) : à chaque ouverture et au plus 1 fois/heure, `restorePurchases()` interroge Google Play (un abonnement expiré n'est plus renvoyé). Confirmation mémorisée (`premium_verified_ms`) valable 7 jours si Google Play ne répond pas (hors ligne). L'achat doit être acquitté (`completePurchase`) sinon remboursement automatique après 3 jours.
 - **Anti-triche horloge** : décalage mesuré avec `getIdTokenResult(true).issuedAtTime` + mémorisation de la dernière heure vue (on ne peut pas reculer la date).
-- **Mode développement** : sans valeurs Firebase (`--dart-define`), pas de connexion ni d'achat, tout est débloqué. Les builds de la CI sans secrets GitHub sont donc en mode développement.
-- **Devises** : prix de base CAD dans Play Console ; Google convertit par pays et l'application affiche `ProductDetails.price` (déjà localisé).
+- **Mode développement** : sans valeurs Firebase (`--dart-define`), pas de connexion ni d'abonnement, tout est débloqué. Les builds de la CI sans secrets GitHub sont donc en mode développement.
+- **Devises** : prix de base CAD dans Play Console ; Google convertit par pays et l'application affiche `ProductDetails.price` (déjà localisé). Commission Google : 15 % sur les abonnements à renouvellement automatique (vérifier le barème en vigueur).
 - **Compte bancaire de versement** : géré uniquement dans le profil de paiements de Play Console, jamais dans l'application ni dans le dépôt.
-- **Suppression de compte** : dans l'application (Réglages → Compte) + page web (`docs/suppression-compte.html`), exigées par Google Play.
-- Phone Auth exige le forfait Firebase Blaze (SMS facturés par pays).
+- **Suppression de compte** : dans l'application (Réglages → Compte) + page web (`docs/suppression-compte.html`), exigées par Google Play. Elle n'annule pas l'abonnement (message affiché à l'utilisateur).
+- Alternative non retenue : essai gratuit natif de 7 jours sur l'abonnement (carte exigée dès le début).
 
 ## 5. Limites connues
 - **Données des fabricants** : aucune base ouverte et gratuite des calendriers officiels par modèle et par année. Le catalogue donne des intervalles INDICATIFS par marque (huile : 8 000 km / 6 mois pour la plupart, 12 000 km / 12 mois pour GM, 15 000 km / 12 mois pour les marques allemandes et Volvo). Toujours à valider avec le manuel du propriétaire. L'application affiche cet avertissement.
@@ -61,8 +62,8 @@ tool/setup_platforms.py génération android/ios + réglages natifs
 - **Pas de sauvegarde ni de synchronisation** : désinstaller l'application efface les données. Pas d'import, seulement un export CSV (copie dans le presse-papiers).
 - Notifications programmées avec `AndroidScheduleMode.inexactAllowWhileIdle` : l'heure peut varier de quelques minutes ; certaines marques de téléphones (économie de batterie agressive) peuvent retarder ou bloquer les rappels.
 - Fuseau horaire : détecté sans plugin en cherchant un fuseau IANA dont les décalages saisonniers correspondent à ceux de l'appareil (`_detectLocation`). Approximation fiable pour l'heure locale, mais le nom du fuseau peut différer du vrai (ex. un voisin avec les mêmes règles).
-- Jamais testée sur un vrai téléphone au moment de cette note (compilation, analyse et tests de la CI réussis). Connexion par SMS et achat réel non testés (ils demandent vos comptes Firebase et Google Play).
-- **Achat vérifié côté appareil seulement** : état « acheté » lu depuis Google Play et mis en cache (`premium_v1`) ; remboursements non détectés, appareils modifiés contournables. Amélioration : vérification serveur (API Google Play Developer + Cloud Functions).
+- Jamais testée sur un vrai téléphone au moment de cette note (compilation, analyse et tests de la CI réussis). Création de compte et abonnement réel non testés (ils demandent vos comptes Firebase et Google Play).
+- **Abonnement vérifié côté appareil seulement** : état lu depuis Google Play et mis en cache 7 jours ; un abonnement annulé/remboursé peut rester actif jusqu'à 7 jours hors ligne ; appareils modifiés contournables. L'abonnement suit le compte Google Play, pas le compte courriel. Amélioration : vérification serveur (API Google Play Developer + Cloud Functions + notifications temps réel).
 - **Comptes multiples** : on peut créer d'autres comptes pour renouveler l'essai.
 - **iOS** : pas d'achat intégré configuré (il faudrait StoreKit via `in_app_purchase`, un produit App Store Connect et un compte Apple Developer).
 
@@ -79,7 +80,7 @@ tool/setup_platforms.py génération android/ios + réglages natifs
 
 ## 7. Mises à niveau recommandées (par priorité)
 1. **Tester sur téléphone** et corriger : notification de test, rappels programmés, redémarrage du téléphone, optimisation de batterie.
-2. **Mise en ligne Google Play** : suivre `PLAY_STORE.md` (clé de signature + secrets GitHub, Firebase, produit à achat unique, fiche, test fermé 12 testeurs / 14 jours si compte personnel récent). La signature de production et l'AAB sont déjà gérés par la CI quand les secrets existent.
+2. **Mise en ligne Google Play** : suivre `PLAY_STORE.md` (clé de signature + secrets GitHub, Firebase, abonnement annuel, fiche, test fermé 12 testeurs / 14 jours si compte personnel récent). La signature de production et l'AAB sont déjà gérés par la CI quand les secrets existent.
 3. **Icône et écran de démarrage** personnalisés (`flutter_launcher_icons`, `flutter_native_splash`) : l'icône actuelle est celle par défaut de Flutter.
 4. **Données de calendriers par modèle** : remplir `kModelOverrides` à partir des manuels, ou utiliser une source sous licence (décodage du NIV).
 5. **Sauvegarde / restauration** : export et import JSON ; plus tard, synchronisation cloud.

@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -18,7 +17,8 @@ class AccessDecision {
 }
 
 /// Règle d'accès (pure, testable) :
-/// connexion obligatoire → achat → essai de [trialDays] jours → blocage.
+/// connexion obligatoire → abonnement actif → essai de [trialDays] jours →
+/// blocage.
 AccessDecision decideAccess({
   required bool signedIn,
   required DateTime? accountCreated,
@@ -35,6 +35,18 @@ AccessDecision decideAccess({
     return AccessDecision(AccessStatus.trial, left < 1 ? 1 : left);
   }
   return const AccessDecision(AccessStatus.expired, 0);
+}
+
+/// L'abonnement est considéré actif si Google Play l'a confirmé il y a moins
+/// de [graceDays] jours (tolère un téléphone hors ligne).
+bool entitlementValid({
+  required DateTime? verifiedAt,
+  required DateTime now,
+  int graceDays = AppConfig.entitlementGraceDays,
+}) {
+  if (verifiedAt == null) return false;
+  final age = now.difference(verifiedAt);
+  return !age.isNegative && age < Duration(days: graceDays);
 }
 
 String authErrorMessage(Object e) {
@@ -54,14 +66,6 @@ String authErrorMessage(Object e) {
         return 'Trop de tentatives. Réessayez plus tard.';
       case 'network-request-failed':
         return 'Pas de connexion internet.';
-      case 'invalid-phone-number':
-        return 'Numéro de téléphone invalide (format : +1 514 555 0123).';
-      case 'invalid-verification-code':
-        return 'Code de vérification incorrect.';
-      case 'session-expired':
-        return 'Le code a expiré. Demandez-en un nouveau.';
-      case 'quota-exceeded':
-        return 'Limite de messages atteinte. Réessayez plus tard.';
       case 'requires-recent-login':
         return 'Pour des raisons de sécurité, déconnectez-vous puis '
             'reconnectez-vous avant de supprimer votre compte.';
@@ -72,10 +76,10 @@ String authErrorMessage(Object e) {
   return 'Une erreur est survenue.';
 }
 
-/// Gère la connexion (Firebase Auth), l'essai gratuit et l'achat unique
-/// (Google Play Billing).
+/// Gère la connexion par courriel (Firebase Auth), l'essai gratuit et
+/// l'abonnement annuel (Google Play Billing).
 class AccessController extends ChangeNotifier with WidgetsBindingObserver {
-  static const _kPremium = 'premium_v1';
+  static const _kVerified = 'premium_verified_ms';
   static const _kLastServer = 'last_server_ms';
 
   AccessStatus status = AccessStatus.loading;
@@ -85,13 +89,13 @@ class AccessController extends ChangeNotifier with WidgetsBindingObserver {
   String? message;
   ProductDetails? product;
   bool storeAvailable = true;
-  bool phoneCodeSent = false;
   User? user;
 
-  String? _verificationId;
-  int? _resendToken;
   Duration _skew = Duration.zero;
   DateTime? _lastServer;
+  DateTime? _verifiedAt;
+  DateTime? _lastCheck;
+  Completer<bool>? _verifyCompleter;
   StreamSubscription<User?>? _authSub;
   StreamSubscription<List<PurchaseDetails>>? _purchSub;
   Timer? _timer;
@@ -99,12 +103,7 @@ class AccessController extends ChangeNotifier with WidgetsBindingObserver {
 
   void attach(AppState app) => _app = app;
 
-  String get identifier {
-    final u = user;
-    if (u == null) return '';
-    if ((u.email ?? '').isNotEmpty) return u.email!;
-    return u.phoneNumber ?? '';
-  }
+  String get identifier => user?.email ?? '';
 
   Future<void> init({String? initError}) async {
     if (initError != null) {
@@ -119,7 +118,8 @@ class AccessController extends ChangeNotifier with WidgetsBindingObserver {
       return;
     }
     final prefs = await SharedPreferences.getInstance();
-    premium = prefs.getBool(_kPremium) ?? false;
+    final v = prefs.getInt(_kVerified);
+    if (v != null) _verifiedAt = DateTime.fromMillisecondsSinceEpoch(v);
     final ms = prefs.getInt(_kLastServer);
     if (ms != null) _lastServer = DateTime.fromMillisecondsSinceEpoch(ms);
 
@@ -136,7 +136,10 @@ class AccessController extends ChangeNotifier with WidgetsBindingObserver {
     if (state == AppLifecycleState.resumed) {
       final u = user;
       if (u != null) {
-        _syncServerTime(u).then((_) => _recompute());
+        _syncServerTime(u).then((_) {
+          _recompute();
+          unawaited(verifyEntitlement());
+        });
       }
     }
   }
@@ -182,19 +185,31 @@ class AccessController extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
+  Future<void> _setVerified(DateTime? t) async {
+    _verifiedAt = t;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (t == null) {
+        await prefs.remove(_kVerified);
+      } else {
+        await prefs.setInt(_kVerified, t.millisecondsSinceEpoch);
+      }
+    } catch (_) {}
+  }
+
   // ---- Décision --------------------------------------------------------------
 
   Future<void> _onUser(User? u) async {
     user = u;
-    phoneCodeSent = false;
-    _verificationId = null;
     if (u != null) await _syncServerTime(u);
     _recompute();
+    if (u != null) unawaited(verifyEntitlement());
   }
 
   void _recompute() {
     if (status == AccessStatus.devMode || status == AccessStatus.error) return;
     final now = _now();
+    premium = entitlementValid(verifiedAt: _verifiedAt, now: now);
     final d = decideAccess(
       signedIn: user != null,
       accountCreated: user?.metadata.creationTime,
@@ -215,7 +230,7 @@ class AccessController extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
   }
 
-  // ---- Achat -----------------------------------------------------------------
+  // ---- Abonnement ---------------------------------------------------------
 
   Future<void> loadStore() async {
     try {
@@ -224,16 +239,53 @@ class AccessController extends ChangeNotifier with WidgetsBindingObserver {
       if (storeAvailable) {
         final r = await iap.queryProductDetails({AppConfig.productId});
         product = r.productDetails.isEmpty ? null : r.productDetails.first;
-        if (!premium) await iap.restorePurchases();
       }
     } catch (e) {
       storeAvailable = false;
     }
     notifyListeners();
+    if (storeAvailable) await verifyEntitlement(force: true);
+  }
+
+  /// Demande à Google Play les abonnements actifs du compte Google de
+  /// l'appareil. Un abonnement annulé ou expiré n'y figure plus.
+  /// Hors ligne ou sans réponse, la dernière confirmation reste valable
+  /// [AppConfig.entitlementGraceDays] jours.
+  Future<void> verifyEntitlement({bool force = false}) async {
+    if (!AppConfig.firebaseConfigured) return;
+    final now = _now();
+    final last = _lastCheck;
+    if (!force && last != null && now.difference(last) < const Duration(hours: 1)) {
+      return;
+    }
+    _lastCheck = now;
+    try {
+      final iap = InAppPurchase.instance;
+      if (!await iap.isAvailable()) return;
+      final c = Completer<bool>();
+      _verifyCompleter = c;
+      await iap.restorePurchases();
+      final found = await c.future
+          .timeout(const Duration(seconds: 8), onTimeout: () => false);
+      final answered = c.isCompleted;
+      _verifyCompleter = null;
+      if (found == true) {
+        await _setVerified(_now());
+      } else if (answered) {
+        // Réponse de Google Play sans abonnement actif.
+        await _setVerified(null);
+      }
+      // Pas de réponse : résultat non concluant, on garde la confirmation
+      // précédente jusqu'à la fin du délai de tolérance.
+    } catch (_) {
+      _verifyCompleter = null;
+    }
+    _recompute();
   }
 
   Future<void> _onPurchases(List<PurchaseDetails> list) async {
     final iap = InAppPurchase.instance;
+    var foundActive = false;
     for (final p in list) {
       if (p.productID != AppConfig.productId) {
         if (p.pendingCompletePurchase) await iap.completePurchase(p);
@@ -245,18 +297,17 @@ class AccessController extends ChangeNotifier with WidgetsBindingObserver {
           break;
         case PurchaseStatus.purchased:
         case PurchaseStatus.restored:
-          premium = true;
+          foundActive = true;
           busy = false;
           message = null;
-          try {
-            final prefs = await SharedPreferences.getInstance();
-            await prefs.setBool(_kPremium, true);
-          } catch (_) {}
+          await _setVerified(_now());
+          // Obligatoire : sans accusé de réception, Google rembourse
+          // l'achat après 3 jours.
           if (p.pendingCompletePurchase) await iap.completePurchase(p);
           break;
         case PurchaseStatus.error:
           busy = false;
-          message = p.error?.message ?? "L'achat a échoué.";
+          message = p.error?.message ?? "L'abonnement a échoué.";
           if (p.pendingCompletePurchase) await iap.completePurchase(p);
           break;
         case PurchaseStatus.canceled:
@@ -264,13 +315,15 @@ class AccessController extends ChangeNotifier with WidgetsBindingObserver {
           break;
       }
     }
+    final c = _verifyCompleter;
+    if (c != null && !c.isCompleted) c.complete(foundActive);
     _recompute();
   }
 
   Future<void> buy() async {
     final prod = product;
     if (prod == null) {
-      message = "Le produit n'est pas disponible dans Google Play.";
+      message = "L'abonnement n'est pas disponible dans Google Play.";
       notifyListeners();
       return;
     }
@@ -278,11 +331,12 @@ class AccessController extends ChangeNotifier with WidgetsBindingObserver {
     busy = true;
     notifyListeners();
     try {
+      // Pour un abonnement, le plugin utilise aussi buyNonConsumable.
       await InAppPurchase.instance
           .buyNonConsumable(purchaseParam: PurchaseParam(productDetails: prod));
     } catch (e) {
       busy = false;
-      message = "Impossible de lancer l'achat.";
+      message = "Impossible de lancer l'abonnement.";
       notifyListeners();
     }
   }
@@ -292,10 +346,9 @@ class AccessController extends ChangeNotifier with WidgetsBindingObserver {
     busy = true;
     notifyListeners();
     try {
-      await InAppPurchase.instance.restorePurchases();
-      await Future<void>.delayed(const Duration(seconds: 4));
+      await verifyEntitlement(force: true);
       if (!premium) {
-        message = 'Aucun achat à restaurer pour ce compte Google Play.';
+        message = 'Aucun abonnement actif trouvé pour ce compte Google Play.';
       }
     } catch (e) {
       message = 'Restauration impossible pour le moment.';
@@ -304,7 +357,7 @@ class AccessController extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
   }
 
-  // ---- Connexion -------------------------------------------------------------
+  // ---- Connexion (courriel seulement) -------------------------------------
 
   /// Retourne un message d'erreur, ou null en cas de succès.
   Future<String?> signInEmail(String email, String password) async {
@@ -336,73 +389,17 @@ class AccessController extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
-  /// Envoie le code SMS. [phone] au format international (+15145550123).
-  Future<String?> startPhone(String phone, {bool resend = false}) async {
-    final completer = Completer<String?>();
-    try {
-      await FirebaseAuth.instance.verifyPhoneNumber(
-        phoneNumber: phone,
-        forceResendingToken: resend ? _resendToken : null,
-        timeout: const Duration(seconds: 60),
-        verificationCompleted: (cred) async {
-          // Récupération automatique du SMS sur Android.
-          try {
-            await FirebaseAuth.instance.signInWithCredential(cred);
-          } catch (_) {}
-          if (!completer.isCompleted) completer.complete(null);
-        },
-        verificationFailed: (e) {
-          if (!completer.isCompleted) completer.complete(authErrorMessage(e));
-        },
-        codeSent: (id, token) {
-          _verificationId = id;
-          _resendToken = token;
-          phoneCodeSent = true;
-          notifyListeners();
-          if (!completer.isCompleted) completer.complete(null);
-        },
-        codeAutoRetrievalTimeout: (id) {
-          _verificationId = id;
-        },
-      );
-    } catch (e) {
-      if (!completer.isCompleted) completer.complete(authErrorMessage(e));
-    }
-    return completer.future;
-  }
-
-  Future<String?> confirmCode(String code) async {
-    final id = _verificationId;
-    if (id == null) return 'Demandez d\'abord un code.';
-    try {
-      final cred =
-          PhoneAuthProvider.credential(verificationId: id, smsCode: code.trim());
-      await FirebaseAuth.instance.signInWithCredential(cred);
-      return null;
-    } catch (e) {
-      return authErrorMessage(e);
-    }
-  }
-
-  void resetPhoneFlow() {
-    phoneCodeSent = false;
-    _verificationId = null;
-    notifyListeners();
-  }
-
   Future<void> signOut() => FirebaseAuth.instance.signOut();
 
   /// Supprime le compte (et efface les données locales de l'appareil).
+  /// L'abonnement Google Play, lui, doit être annulé dans Google Play.
   Future<String?> deleteAccount() async {
     final u = FirebaseAuth.instance.currentUser;
     if (u == null) return null;
     try {
       await u.delete();
       await _app?.eraseAll();
-      try {
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.remove(_kPremium);
-      } catch (_) {}
+      await _setVerified(null);
       premium = false;
       return null;
     } catch (e) {

@@ -178,8 +178,10 @@ class _AccountSection extends StatelessWidget {
         content: const Text(
             'Votre compte et les données de cet appareil (véhicules, '
             'historique, réglages) seront supprimés définitivement. '
-            'Cette action est irréversible. Un achat déjà effectué reste '
-            'associé à votre compte Google Play.'),
+            'Cette action est irréversible. Elle n\'annule pas votre '
+            'abonnement : annulez-le dans Google Play (Paiements et '
+            'abonnements → Abonnements) pour éviter le prochain '
+            'renouvellement.'),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
@@ -203,7 +205,7 @@ class _AccountSection extends StatelessWidget {
     String statusText;
     switch (access.status) {
       case AccessStatus.premium:
-        statusText = 'Version complète (achat effectué)';
+        statusText = 'Abonnement annuel actif';
         break;
       case AccessStatus.trial:
         statusText =
@@ -231,10 +233,16 @@ class _AccountSection extends StatelessWidget {
             leading: const Icon(Icons.developer_mode),
             title: Text(statusText),
           ),
+        if (!isDev && access.status == AccessStatus.premium)
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Text(
+                "Gérer ou annuler l'abonnement : Google Play → Paiements et abonnements → Abonnements."),
+          ),
         if (!isDev && access.status == AccessStatus.trial)
           ListTile(
             leading: const Icon(Icons.shopping_cart_outlined),
-            title: const Text('Acheter la version complète'),
+            title: const Text("S'abonner (5 \$ CA par an)"),
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(
@@ -244,7 +252,7 @@ class _AccountSection extends StatelessWidget {
         if (!isDev && access.status != AccessStatus.premium)
           ListTile(
             leading: const Icon(Icons.restore),
-            title: const Text('Restaurer mon achat'),
+            title: const Text('Restaurer mon abonnement'),
             onTap: access.busy ? null : access.restore,
           ),
         if (!isDev)

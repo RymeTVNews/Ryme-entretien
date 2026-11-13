@@ -51,7 +51,7 @@ Future<void> main() async {
 }
 
 /// Aiguille vers l'écran voulu selon l'état d'accès :
-/// connexion → essai de 7 jours → achat unique.
+/// connexion par courriel → essai de 7 jours → abonnement annuel.
 class AccessGate extends StatelessWidget {
   const AccessGate({super.key});
 

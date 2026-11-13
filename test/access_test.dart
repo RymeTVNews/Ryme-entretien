@@ -45,6 +45,35 @@ void main() {
     expect(r.status, AccessStatus.premium);
   });
 
+  group("validité de l'abonnement", () {
+    final now = DateTime(2026, 11, 20);
+
+    test('jamais confirmé : inactif', () {
+      expect(entitlementValid(verifiedAt: null, now: now), isFalse);
+    });
+
+    test('confirmé il y a 2 jours : actif', () {
+      expect(
+          entitlementValid(
+              verifiedAt: now.subtract(const Duration(days: 2)), now: now),
+          isTrue);
+    });
+
+    test('confirmé il y a 8 jours (hors ligne) : inactif', () {
+      expect(
+          entitlementValid(
+              verifiedAt: now.subtract(const Duration(days: 8)), now: now),
+          isFalse);
+    });
+
+    test('confirmation datée du futur (horloge reculée) : inactif', () {
+      expect(
+          entitlementValid(
+              verifiedAt: now.add(const Duration(days: 1)), now: now),
+          isFalse);
+    });
+  });
+
   test("date de création inconnue : essai complet", () {
     final r = decideAccess(
       signedIn: true,
