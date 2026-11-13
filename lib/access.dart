@@ -416,12 +416,14 @@ class AccessController extends ChangeNotifier with WidgetsBindingObserver {
   }
 }
 
-List<PricingPhaseWrapper> _phases(ProductDetails? p) {
+List<dynamic> _phases(ProductDetails? p) {
   if (p is! GooglePlayProductDetails) return const [];
   final i = p.subscriptionIndex;
-  final offers = p.productDetails.subscriptionOfferDetails;
-  if (i == null || offers == null || i >= offers.length) return const [];
-  return offers[i].pricingPhases;
+  final dynamic offers = p.productDetails.subscriptionOfferDetails;
+  if (i == null || offers == null || i >= (offers.length as int)) {
+    return const [];
+  }
+  return offers[i].pricingPhases as List<dynamic>;
 }
 
 /// Google Play ne renvoie l'offre d'essai qu'aux comptes qui y ont droit
@@ -436,10 +438,10 @@ ProductDetails? pickOffer(List<ProductDetails> list) {
 }
 
 bool hasFreeTrial(ProductDetails? p) =>
-    _phases(p).any((f) => f.priceAmountMicros == 0);
+    _phases(p).any((dynamic f) => f.priceAmountMicros == 0);
 
 String? recurringPriceOf(ProductDetails? p) {
   final ph = _phases(p);
-  if (ph.isNotEmpty) return ph.last.formattedPrice;
+  if (ph.isNotEmpty) return ph.last.formattedPrice as String?;
   return p?.price;
 }
