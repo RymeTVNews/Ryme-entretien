@@ -16,6 +16,10 @@ class AppState extends ChangeNotifier {
   AppSettings settings = AppSettings();
   bool loaded = false;
 
+  /// Faux quand l'essai est terminé sans achat, ou sans connexion : on
+  /// n'envoie alors aucune notification.
+  bool allowNotifications = true;
+
   Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_key);
@@ -53,7 +57,27 @@ class AppState extends ChangeNotifier {
     await replan();
   }
 
+  Future<void> setAllowNotifications(bool v) async {
+    if (allowNotifications == v) return;
+    allowNotifications = v;
+    await replan();
+  }
+
+  /// Efface toutes les données locales (utilisé à la suppression du compte).
+  Future<void> eraseAll() async {
+    vehicles = [];
+    records = [];
+    settings = AppSettings();
+    await _persist();
+  }
+
   Future<void> replan() async {
+    if (!allowNotifications) {
+      try {
+        await NotificationService.cancelAll();
+      } catch (_) {}
+      return;
+    }
     try {
       final plan = buildPlan(
         vehicles: vehicles,

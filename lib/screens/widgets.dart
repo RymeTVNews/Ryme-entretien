@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../access.dart';
 import '../engine.dart';
 import '../models.dart';
 import '../state.dart';
 import '../util.dart';
+import 'paywall_screen.dart';
 
 Color statusColor(BuildContext context, DueStatus s) {
   switch (s) {
@@ -207,4 +209,41 @@ Future<void> showOdometerDialog(BuildContext context, Vehicle v) async {
       ],
     ),
   );
+}
+
+
+/// Bandeau affiché pendant l'essai gratuit.
+class TrialBanner extends StatelessWidget {
+  const TrialBanner({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final access = context.watch<AccessController>();
+    if (access.status != AccessStatus.trial) return const SizedBox.shrink();
+    final d = access.daysLeft;
+    return Material(
+      color: Theme.of(context).colorScheme.secondaryContainer,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Essai gratuit : $d jour${d > 1 ? 's' : ''} restant${d > 1 ? 's' : ''}',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ),
+            TextButton(
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const PaywallScreen(canClose: true)),
+              ),
+              child: const Text('Acheter'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../access.dart';
+import '../config.dart';
 import '../notifications.dart';
 import '../state.dart';
 import '../util.dart';
+import 'paywall_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -16,6 +19,8 @@ class SettingsScreen extends StatelessWidget {
 
     return ListView(
       children: [
+        const _AccountSection(),
+        const Divider(),
         const _Section('Notifications'),
         SwitchListTile(
           title: const Text('Activer les rappels'),
@@ -158,4 +163,125 @@ class _Section extends StatelessWidget {
                 fontWeight: FontWeight.bold,
                 color: Theme.of(context).colorScheme.primary)),
       );
+}
+
+
+class _AccountSection extends StatelessWidget {
+  const _AccountSection();
+
+  Future<void> _confirmDelete(BuildContext context) async {
+    final access = context.read<AccessController>();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Supprimer mon compte ?'),
+        content: const Text(
+            'Votre compte et les données de cet appareil (véhicules, '
+            'historique, réglages) seront supprimés définitivement. '
+            'Cette action est irréversible. Un achat déjà effectué reste '
+            'associé à votre compte Google Play.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Annuler')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Supprimer')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    final err = await access.deleteAccount();
+    if (err != null && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final access = context.watch<AccessController>();
+    String statusText;
+    switch (access.status) {
+      case AccessStatus.premium:
+        statusText = 'Version complète (achat effectué)';
+        break;
+      case AccessStatus.trial:
+        statusText =
+            'Essai gratuit : ${access.daysLeft} jour${access.daysLeft > 1 ? 's' : ''} restant${access.daysLeft > 1 ? 's' : ''}';
+        break;
+      case AccessStatus.devMode:
+        statusText = 'Mode développement (connexion et achat non configurés)';
+        break;
+      default:
+        statusText = '';
+    }
+    final isDev = access.status == AccessStatus.devMode;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _Section('Compte'),
+        if (!isDev)
+          ListTile(
+            leading: const Icon(Icons.person_outline),
+            title: Text(access.identifier.isEmpty ? 'Connecté' : access.identifier),
+            subtitle: Text(statusText),
+          )
+        else
+          ListTile(
+            leading: const Icon(Icons.developer_mode),
+            title: Text(statusText),
+          ),
+        if (!isDev && access.status == AccessStatus.trial)
+          ListTile(
+            leading: const Icon(Icons.shopping_cart_outlined),
+            title: const Text('Acheter la version complète'),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                  builder: (_) => const PaywallScreen(canClose: true)),
+            ),
+          ),
+        if (!isDev && access.status != AccessStatus.premium)
+          ListTile(
+            leading: const Icon(Icons.restore),
+            title: const Text('Restaurer mon achat'),
+            onTap: access.busy ? null : access.restore,
+          ),
+        if (!isDev)
+          ListTile(
+            leading: const Icon(Icons.logout),
+            title: const Text('Se déconnecter'),
+            onTap: access.signOut,
+          ),
+        if (!isDev)
+          ListTile(
+            leading: Icon(Icons.delete_forever,
+                color: Theme.of(context).colorScheme.error),
+            title: Text('Supprimer mon compte',
+                style: TextStyle(color: Theme.of(context).colorScheme.error)),
+            onTap: () => _confirmDelete(context),
+          ),
+        if (AppConfig.privacyUrl.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: SelectableText(
+                'Politique de confidentialité : ${AppConfig.privacyUrl}',
+                style: Theme.of(context).textTheme.bodySmall),
+          ),
+        if (AppConfig.deletionUrl.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+            child: SelectableText(
+                'Demande de suppression en ligne : ${AppConfig.deletionUrl}',
+                style: Theme.of(context).textTheme.bodySmall),
+          ),
+        if (AppConfig.supportEmail.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+            child: SelectableText('Assistance : ${AppConfig.supportEmail}',
+                style: Theme.of(context).textTheme.bodySmall),
+          ),
+      ],
+    );
+  }
 }

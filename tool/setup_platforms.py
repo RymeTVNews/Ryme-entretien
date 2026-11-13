@@ -57,7 +57,8 @@ if "ScheduledNotificationReceiver" not in m:
 m = re.sub(r'android:label="[^"]*"', f'android:label="{APP_NAME}"', m, count=1)
 manifest.write_text(m, encoding="utf-8")
 
-# Desugaring Java 8+ requis par flutter_local_notifications.
+# Desugaring Java 8+ (flutter_local_notifications), minSdk 23 (Firebase) et
+# signature de production (android/key.properties, créé par la CI ou à la main).
 kts = ROOT / "android/app/build.gradle.kts"
 groovy = ROOT / "android/app/build.gradle"
 if kts.exists():
@@ -67,6 +68,31 @@ if kts.exists():
                       "compileOptions {\n        isCoreLibraryDesugaringEnabled = true", 1)
     if "coreLibraryDesugaring(" not in g:
         g += '\ndependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")\n}\n'
+    g = re.sub(r"minSdk(Version)?\s*=\s*flutter\.minSdkVersion",
+               "minSdk = maxOf(flutter.minSdkVersion, 23)", g, count=1)
+    if "keystoreProperties" not in g:
+        g = "import java.io.FileInputStream\nimport java.util.Properties\n\n" + g
+        g = g.replace("android {", """val keystoreProperties = Properties()
+val keystorePropertiesFile = rootProject.file("key.properties")
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+}
+
+android {
+    signingConfigs {
+        create("release") {
+            if (keystorePropertiesFile.exists()) {
+                keyAlias = keystoreProperties["keyAlias"] as String
+                keyPassword = keystoreProperties["keyPassword"] as String
+                storeFile = file(keystoreProperties["storeFile"] as String)
+                storePassword = keystoreProperties["storePassword"] as String
+            }
+        }
+    }
+""", 1)
+        g = re.sub(r'signingConfig\s*=\s*signingConfigs\.getByName\("debug"\)',
+                   'signingConfig = if (keystorePropertiesFile.exists()) signingConfigs.getByName("release") else signingConfigs.getByName("debug")',
+                   g, count=1)
     kts.write_text(g, encoding="utf-8")
 elif groovy.exists():
     g = groovy.read_text(encoding="utf-8")
@@ -75,6 +101,30 @@ elif groovy.exists():
                       "compileOptions {\n        coreLibraryDesugaringEnabled true", 1)
     if "coreLibraryDesugaring '" not in g:
         g += "\ndependencies {\n    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4'\n}\n"
+    g = re.sub(r"minSdkVersion\s+flutter\.minSdkVersion",
+               "minSdkVersion Math.max(flutter.minSdkVersion, 23)", g, count=1)
+    if "keystoreProperties" not in g:
+        g = g.replace("android {", """def keystoreProperties = new Properties()
+def keystorePropertiesFile = rootProject.file('key.properties')
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
+
+android {
+    signingConfigs {
+        release {
+            if (keystorePropertiesFile.exists()) {
+                keyAlias keystoreProperties['keyAlias']
+                keyPassword keystoreProperties['keyPassword']
+                storeFile file(keystoreProperties['storeFile'])
+                storePassword keystoreProperties['storePassword']
+            }
+        }
+    }
+""", 1)
+        g = re.sub(r"signingConfig\s+signingConfigs\.(debug|getByName\('debug'\))",
+                   "signingConfig keystorePropertiesFile.exists() ? signingConfigs.release : signingConfigs.debug",
+                   g, count=1)
     groovy.write_text(g, encoding="utf-8")
 else:
     print("AVERTISSEMENT : build.gradle introuvable (Android).", file=sys.stderr)

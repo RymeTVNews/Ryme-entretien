@@ -37,7 +37,12 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       appBar: AppBar(title: Text(titles[_tab])),
       body: state.loaded
-          ? pages[_tab]
+          ? Column(
+              children: [
+                const TrialBanner(),
+                Expanded(child: pages[_tab]),
+              ],
+            )
           : const Center(child: CircularProgressIndicator()),
       floatingActionButton: _tab == 0
           ? FloatingActionButton.extended(

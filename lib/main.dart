@@ -1,10 +1,15 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:provider/provider.dart';
 
+import 'access.dart';
+import 'config.dart';
 import 'notifications.dart';
+import 'screens/auth_screen.dart';
 import 'screens/home_screen.dart';
+import 'screens/paywall_screen.dart';
 import 'state.dart';
 
 Future<void> main() async {
@@ -15,11 +20,67 @@ Future<void> main() async {
   } catch (e) {
     debugPrint('Initialisation des notifications impossible : $e');
   }
+  String? initError;
+  if (AppConfig.firebaseConfigured) {
+    try {
+      await Firebase.initializeApp(
+        options: const FirebaseOptions(
+          apiKey: AppConfig.firebaseApiKey,
+          appId: AppConfig.firebaseAppId,
+          messagingSenderId: AppConfig.firebaseSenderId,
+          projectId: AppConfig.firebaseProjectId,
+        ),
+      );
+    } catch (e) {
+      initError = "Impossible d'initialiser la connexion ($e).";
+    }
+  }
   final state = AppState();
   await state.load();
+  final access = AccessController()..attach(state);
+  await access.init(initError: initError);
   runApp(
-    ChangeNotifierProvider.value(value: state, child: const EntretienApp()),
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider<AppState>.value(value: state),
+        ChangeNotifierProvider<AccessController>.value(value: access),
+      ],
+      child: const EntretienApp(),
+    ),
   );
+}
+
+/// Aiguille vers l'écran voulu selon l'état d'accès :
+/// connexion → essai de 7 jours → achat unique.
+class AccessGate extends StatelessWidget {
+  const AccessGate({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final access = context.watch<AccessController>();
+    switch (access.status) {
+      case AccessStatus.loading:
+        return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      case AccessStatus.signedOut:
+        return const AuthScreen();
+      case AccessStatus.expired:
+        return const PaywallScreen();
+      case AccessStatus.error:
+        return Scaffold(
+          body: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text(access.message ?? 'Erreur',
+                  textAlign: TextAlign.center),
+            ),
+          ),
+        );
+      case AccessStatus.trial:
+      case AccessStatus.premium:
+      case AccessStatus.devMode:
+        return const HomeScreen();
+    }
+  }
 }
 
 class EntretienApp extends StatelessWidget {
@@ -49,7 +110,7 @@ class EntretienApp extends StatelessWidget {
         ),
       ),
       themeMode: ThemeMode.system,
-      home: const HomeScreen(),
+      home: const AccessGate(),
     );
   }
 }
