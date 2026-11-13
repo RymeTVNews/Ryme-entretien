@@ -33,7 +33,9 @@ class PaywallScreen extends StatelessWidget {
                   ? 'Merci ! Votre abonnement est actif.'
                   : (canClose
                       ? 'Débloquez Ryme entretien'
-                      : 'Votre essai gratuit est terminé'),
+                      : (access.trialOffered
+                          ? 'Essayez gratuitement pendant ${AppConfig.trialDays} jours'
+                          : 'Abonnez-vous pour continuer')),
               style: Theme.of(context).textTheme.headlineSmall,
               textAlign: TextAlign.center,
             ),
@@ -52,16 +54,31 @@ class PaywallScreen extends StatelessWidget {
                   child: Column(
                     children: [
                       Text(
-                        access.product?.price ?? '5,00 \$ CA',
+                        access.recurringPrice ?? '5,00 \$ CA',
                         style: Theme.of(context).textTheme.displaySmall,
                       ),
                       const Text('par an'),
+                      if (access.trialOffered) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          '${AppConfig.trialDays} jours gratuits, puis '
+                          '${access.recurringPrice ?? '5,00 \$ CA'} par an.',
+                          style: Theme.of(context).textTheme.titleMedium,
+                          textAlign: TextAlign.center,
+                        ),
+                        const Text(
+                          "Carte bancaire requise dès le début de l'essai. "
+                          "Si vous n'annulez pas avant la fin des 7 jours, "
+                          'le premier paiement est prélevé automatiquement.',
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
                       const SizedBox(height: 8),
                       Text(
                         "Prix de base : 5,00 \$ CA par an. Hors du Canada, Google "
                         "Play affiche le prix converti dans votre devise selon "
                         "le taux de change en vigueur. L'abonnement est facturé "
-                        "à la souscription, puis chaque année, et se renouvelle "
+                        "après l'essai gratuit (s'il y en a un), puis chaque année, et se renouvelle "
                         "automatiquement jusqu'à son annulation. Annulation à "
                         "tout moment dans Google Play → Paiements et "
                         "abonnements → Abonnements.",
@@ -81,7 +98,9 @@ class PaywallScreen extends StatelessWidget {
                         width: 18,
                         child: CircularProgressIndicator(strokeWidth: 2))
                     : const Icon(Icons.credit_card),
-                label: const Text("S'abonner"),
+                label: Text(access.trialOffered
+                    ? "Commencer l'essai gratuit"
+                    : "S'abonner"),
               ),
               const SizedBox(height: 4),
               Text(

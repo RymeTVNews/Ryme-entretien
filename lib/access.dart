@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/widgets.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
+import 'package:in_app_purchase_android/in_app_purchase_android.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'config.dart';
@@ -215,6 +216,7 @@ class AccessController extends ChangeNotifier with WidgetsBindingObserver {
       accountCreated: user?.metadata.creationTime,
       now: now,
       premium: premium,
+      trialDays: AppConfig.nativeTrial ? 0 : AppConfig.trialDays,
     );
     status = d.status;
     daysLeft = d.daysLeft;
@@ -232,13 +234,19 @@ class AccessController extends ChangeNotifier with WidgetsBindingObserver {
 
   // ---- Abonnement ---------------------------------------------------------
 
+  /// Offre d'essai gratuit disponible pour ce compte Google Play ?
+  bool get trialOffered => hasFreeTrial(product);
+
+  /// Prix récurrent (dernière phase de l'offre), pas « Gratuit ».
+  String? get recurringPrice => recurringPriceOf(product);
+
   Future<void> loadStore() async {
     try {
       final iap = InAppPurchase.instance;
       storeAvailable = await iap.isAvailable();
       if (storeAvailable) {
         final r = await iap.queryProductDetails({AppConfig.productId});
-        product = r.productDetails.isEmpty ? null : r.productDetails.first;
+        product = pickOffer(r.productDetails);
       }
     } catch (e) {
       storeAvailable = false;
@@ -406,4 +414,32 @@ class AccessController extends ChangeNotifier with WidgetsBindingObserver {
       return authErrorMessage(e);
     }
   }
+}
+
+List<PricingPhaseWrapper> _phases(ProductDetails? p) {
+  if (p is! GooglePlayProductDetails) return const [];
+  final i = p.subscriptionIndex;
+  final offers = p.productDetails.subscriptionOfferDetails;
+  if (i == null || offers == null || i >= offers.length) return const [];
+  return offers[i].pricingPhases;
+}
+
+/// Google Play ne renvoie l'offre d'essai qu'aux comptes qui y ont droit
+/// (nouveaux abonnés). On la choisit si elle est présente ; sinon on prend
+/// le forfait de base.
+ProductDetails? pickOffer(List<ProductDetails> list) {
+  if (list.isEmpty) return null;
+  for (final p in list) {
+    if (hasFreeTrial(p)) return p;
+  }
+  return list.first;
+}
+
+bool hasFreeTrial(ProductDetails? p) =>
+    _phases(p).any((f) => f.priceAmountMicros == 0);
+
+String? recurringPriceOf(ProductDetails? p) {
+  final ph = _phases(p);
+  if (ph.isNotEmpty) return ph.last.formattedPrice;
+  return p?.price;
 }

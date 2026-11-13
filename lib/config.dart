@@ -5,8 +5,14 @@
 /// secrets GitHub). Sans configuration Firebase, l'application démarre en
 /// « mode développement » : aucune connexion, aucun achat, tout est débloqué.
 class AppConfig {
-  /// Durée de l'essai gratuit, comptée depuis la création du compte.
+  /// Durée de l'essai gratuit.
   static const int trialDays = 7;
+
+  /// true : l'essai de 7 jours est une offre NATIVE de Google Play sur
+  /// l'abonnement (carte exigée dès le début, facturation automatique au
+  /// 8e jour sauf annulation). false : essai compté dans l'application,
+  /// depuis la création du compte, sans carte.
+  static const bool nativeTrial = true;
 
   /// Identifiant de l'ABONNEMENT annuel créé dans Play Console
   /// (Monétiser → Produits → Abonnements). Forfait de base annuel,

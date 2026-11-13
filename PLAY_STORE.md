@@ -6,8 +6,8 @@ Ce document décrit ce qui est déjà configuré dans le code et ce que vous dev
 
 | Votre demande | Ce qui est mis en place |
 |---|---|
-| Essai de 7 jours | Compté **dans l'application**, depuis la création du compte, **sans carte bancaire**. |
-| Ensuite, 5 $ CA par année | **Application gratuite à télécharger** + **abonnement annuel à renouvellement automatique** « `ryme_entretien_annuel` » à **5,00 CAD par an**, vendu par Google Play Billing. Après 7 jours sans abonnement actif, l'application se verrouille (écran d'abonnement) et n'envoie plus de notifications ; les données restent conservées. |
+| Essai de 7 jours | **Essai gratuit natif de Google Play** sur l'abonnement : **carte bancaire exigée dès le début**, premier paiement prélevé automatiquement au 8ᵉ jour sauf annulation. Google n'offre l'essai qu'une fois par compte Google. |
+| Ensuite, 5 $ CA par année | **Application gratuite à télécharger** + **abonnement annuel à renouvellement automatique** « `ryme_entretien_annuel` » à **5,00 CAD par an**, vendu par Google Play Billing. Sans abonnement actif (essai compris), l'application affiche l'écran d'abonnement et n'envoie pas de notifications ; en cas d'annulation ou de non-paiement, elle se verrouille à nouveau et les données restent conservées. |
 | Paiement en devise étrangère selon le taux en vigueur | Google Play affiche automatiquement le prix converti dans la devise de chaque pays à partir du prix de base en CAD. Vous pouvez vérifier et ajuster le prix de chaque pays dans Play Console. |
 | Paiement par carte bancaire | Géré par Google Play (cartes de crédit/débit, Google Pay, etc., selon le pays de l'acheteur). L'application ne voit jamais de numéro de carte. |
 | Ouverture de compte uniquement par courriel | **Firebase Authentication, courriel + mot de passe** seulement (création de compte, connexion, mot de passe oublié). Aucune connexion par téléphone. |
@@ -15,7 +15,7 @@ Ce document décrit ce qui est déjà configuré dans le code et ce que vous dev
 
 Commission de Google : **15 % sur les abonnements à renouvellement automatique, quel que soit le revenu annuel**. Les barèmes évoluent : vérifiez la page officielle des frais de service de Google Play avant le lancement.
 
-Variante possible : Google Play permet aussi d'ajouter un **essai gratuit natif de 7 jours à l'abonnement**, mais il exige alors une carte dès le début de l'essai et facture automatiquement au 8ᵉ jour. J'ai gardé l'essai dans l'application (sans carte) ; dites-moi si vous préférez la variante native.
+Pour revenir à un essai de 7 jours **dans l'application, sans carte** (compté depuis la création du compte), mettez `nativeTrial = false` dans `lib/config.dart` et ne créez pas l'offre d'essai dans Play Console.
 
 ## 2. Compte bancaire de versement (modifiable à tout moment)
 
@@ -30,8 +30,8 @@ Ne partagez jamais votre numéro de compte dans une conversation, un courriel ou
 
 ## 3. Ce qui est configuré dans le code
 
-- `lib/config.dart` : durée de l'essai (7 jours), identifiant de l'abonnement (`ryme_entretien_annuel`), tolérance hors ligne (7 jours), liens et clés Firebase fournis à la compilation (`--dart-define`).
-- `lib/access.dart` : règle d'accès (connexion → abonnement actif → essai → blocage), connexion par courriel, abonnement, suppression de compte. L'heure du serveur Firebase corrige l'horloge de l'appareil, et l'application ignore un recul de la date du téléphone.
+- `lib/config.dart` : durée de l'essai (7 jours), interrupteur `nativeTrial` (vrai = essai natif Google Play), identifiant de l'abonnement (`ryme_entretien_annuel`), tolérance hors ligne (7 jours), liens et clés Firebase fournis à la compilation (`--dart-define`).
+- `lib/access.dart` : règle d'accès (connexion → abonnement actif, essai natif compris → écran d'abonnement), connexion par courriel, abonnement, suppression de compte. L'heure du serveur Firebase corrige l'horloge de l'appareil, et l'application ignore un recul de la date du téléphone.
 - **Vérification de l'abonnement** : à chaque ouverture (et au plus une fois par heure ensuite), l'application demande à Google Play les abonnements actifs du compte Google de l'appareil. Un abonnement annulé qui est arrivé à échéance n'y figure plus et l'accès se verrouille. Hors ligne, la dernière confirmation reste valable 7 jours.
 - Écrans : création de compte / connexion (`auth_screen.dart`), abonnement (`paywall_screen.dart`, avec prix, durée, renouvellement automatique et comment annuler, comme l'exige Google), section « Compte » dans Réglages (restaurer l'abonnement, se déconnecter, **supprimer mon compte**), bandeau « Essai gratuit : X jours restants ».
 - `tool/setup_platforms.py` : minSdk 23 (exigé par Firebase), signature de production à partir de `android/key.properties`.
@@ -98,14 +98,14 @@ Relancez ensuite la compilation (Actions → Build → « Re-run all jobs »). E
    - ID du produit : `ryme_entretien_annuel` (exactement, il ne pourra pas être modifié)
    - Nom : « Ryme entretien — abonnement annuel »
    - Ajoutez un **forfait de base** (« base plan ») : ID `annuel`, **renouvellement automatique**, période de facturation **1 an**, prix de base **5,00 CAD**. Vérifiez ensuite les prix des autres pays (convertis automatiquement ; modifiables pays par pays).
-   - Ne créez **pas** d'offre d'essai gratuit (l'essai est dans l'application), sauf si vous choisissez la variante native.
+   - Sur le forfait de base `annuel`, ajoutez une **offre** : ID `essai7j`, admissibilité **« Acquisition de nouveaux clients »**, phase **Essai gratuit de 7 jours**, puis **activez** l'offre. L'application la sélectionne automatiquement quand Google la propose au compte ; sinon elle propose l'abonnement normal.
    - Activez la période de grâce / récupération des paiements échoués si Play Console la propose, puis **activez** le forfait de base.
    - L'abonnement ne fonctionne qu'avec une version installée depuis Google Play (test interne compris).
 4. **Testeurs de licence** : Paramètres → Test de licence → ajoutez vos adresses Gmail de test : leurs achats sont simulés (sans frais) et leurs abonnements se renouvellent à un rythme accéléré, parfait pour essayer le paiement et l'annulation.
 5. **Contenu de l'application** (obligatoire avant publication) :
    - Politique de confidentialité : `PRIVACY_URL`
    - Sécurité des données : l'application collecte l'**adresse courriel** (connexion, via Firebase) ; les paiements sont traités par Google Play ; les données d'entretien restent sur l'appareil ; pas de publicité ; pas de partage avec des tiers à des fins commerciales. Indiquez que l'**utilisateur peut demander la suppression** et collez `DELETION_URL`.
-   - **Accès à l'application** : connexion requise. Indiquez que les réviseurs peuvent **créer un compte courriel eux-mêmes** (chaque nouveau compte reçoit 7 jours d'essai complet).
+   - **Accès à l'application** : connexion requise. Indiquez que les réviseurs peuvent **créer un compte courriel eux-mêmes** (l'essai gratuit de 7 jours est proposé à l'achat ; testeurs de licence : essai simulé, sans frais).
    - Classification du contenu (questionnaire), public cible (adultes), annonces (aucune).
 6. **Fiche Play Store** : description courte et longue (mentionnez l'essai de 7 jours puis l'abonnement annuel de 5 $ CA), icône 512 × 512, image de présentation 1024 × 500, au moins 2 captures d'écran de téléphone.
 7. **Publication** :
@@ -125,7 +125,7 @@ Pour les rendre publiques gratuitement : GitHub → dépôt → Settings → Pag
 - **Vérification de l'abonnement côté application seulement.** L'état « abonné » est lu par l'application depuis Google Play et mémorisé 7 jours. Un appareil modifié (« rooté ») pourrait le contourner, et un abonnement annulé ou remboursé peut rester actif jusqu'à 7 jours si le téléphone reste hors ligne. Pour une protection complète : vérification côté serveur avec l'API Google Play Developer (Cloud Functions) et notifications temps réel d'abonnement.
 - **L'abonnement suit le compte Google Play, pas le compte courriel.** Un abonnement acheté avec un compte Google Play débloque l'application pour tout compte courriel connecté sur ce même téléphone.
 - **Supprimer le compte n'annule pas l'abonnement** : l'utilisateur doit l'annuler dans Google Play (le message est affiché dans l'application).
-- **Essai et comptes multiples.** L'essai est lié au compte courriel : quelqu'un peut créer plusieurs comptes pour renouveler l'essai.
+- **Essai natif lié au compte Google Play**, pas au compte courriel : un même compte Google ne reçoit l'essai qu'une fois, mais une personne avec plusieurs comptes Google peut en obtenir plusieurs.
 - **Android seulement.** L'abonnement est configuré pour Google Play. Pour l'App Store (iPhone) il faut un compte Apple Developer (99 $ US/an) et un abonnement équivalent dans App Store Connect.
 - **Jamais testé de bout en bout sur un téléphone** au moment de cette note : la compilation, l'analyse et les tests automatiques de la CI sont vérifiés, mais l'abonnement réel et la création de compte ne peuvent l'être qu'avec vos comptes Firebase et Google Play.
 - Les menus de Play Console et de Firebase évoluent : si un libellé diffère, cherchez le mot-clé dans l'aide de la console.

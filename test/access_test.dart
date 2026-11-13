@@ -40,6 +40,16 @@ void main() {
     expect(d(created.add(const Duration(days: 30))).status, AccessStatus.expired);
   });
 
+  test('essai natif Play (0 jour dans l\'application) : bloqué sans abonnement', () {
+    final r = decideAccess(
+        signedIn: true,
+        accountCreated: created,
+        now: created,
+        premium: false,
+        trialDays: 0);
+    expect(r.status, AccessStatus.expired);
+  });
+
   test("l'achat débloque l'application après l'essai", () {
     final r = d(created.add(const Duration(days: 30)), premium: true);
     expect(r.status, AccessStatus.premium);

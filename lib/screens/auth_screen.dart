@@ -80,8 +80,12 @@ class _AuthScreenState extends State<AuthScreen> {
             const SizedBox(height: 8),
             Text(
               _register
-                  ? 'Créez votre compte avec votre courriel pour commencer '
-                      'votre essai gratuit de ${AppConfig.trialDays} jours.'
+                  ? (AppConfig.nativeTrial
+                      ? 'Créez votre compte avec votre courriel. Un essai '
+                          'gratuit de ${AppConfig.trialDays} jours vous sera '
+                          'proposé ensuite.'
+                      : 'Créez votre compte avec votre courriel pour commencer '
+                          'votre essai gratuit de ${AppConfig.trialDays} jours.')
                   : 'Connectez-vous avec votre courriel.',
               textAlign: TextAlign.center,
             ),

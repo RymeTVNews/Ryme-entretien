@@ -17,6 +17,7 @@ dependencies:
   firebase_core: any
   firebase_auth: any
   in_app_purchase: any
+  in_app_purchase_android: any
   shared_preferences: ^2.3.2
   flutter_local_notifications: ^17.2.4
   timezone: ^0.9.4
