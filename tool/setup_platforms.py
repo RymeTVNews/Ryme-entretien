@@ -129,6 +129,38 @@ android {
 else:
     print("AVERTISSEMENT : build.gradle introuvable (Android).", file=sys.stderr)
 
+# Le contrôle « lintVital » des modules de plugins plante (erreur interne de
+# l'outil lint, NoSuchMethodError) avec certaines combinaisons de versions :
+# on le désactive pour les compilations release.
+root_kts = ROOT / "android/build.gradle.kts"
+root_groovy = ROOT / "android/build.gradle"
+if root_kts.exists():
+    g = root_kts.read_text(encoding="utf-8")
+    if "lintVital" not in g:
+        g += """
+subprojects {
+    tasks.configureEach {
+        if (name.startsWith("lintVital")) {
+            enabled = false
+        }
+    }
+}
+"""
+        root_kts.write_text(g, encoding="utf-8")
+elif root_groovy.exists():
+    g = root_groovy.read_text(encoding="utf-8")
+    if "lintVital" not in g:
+        g += """
+subprojects {
+    tasks.configureEach { task ->
+        if (task.name.startsWith("lintVital")) {
+            task.enabled = false
+        }
+    }
+}
+"""
+        root_groovy.write_text(g, encoding="utf-8")
+
 # -------------------------------------------------------------------- iOS --
 delegate = ROOT / "ios/Runner/AppDelegate.swift"
 if delegate.exists():
