@@ -52,13 +52,13 @@ class PaywallScreen extends StatelessWidget {
                   child: Column(
                     children: [
                       Text(
-                        access.product?.price ?? '5,00 $ CA',
+                        access.product?.price ?? '5,00 \$ CA',
                         style: Theme.of(context).textTheme.displaySmall,
                       ),
                       const Text('paiement unique'),
                       const SizedBox(height: 8),
                       Text(
-                        'Prix de base : 5,00 $ CA. Hors du Canada, Google Play '
+                        'Prix de base : 5,00 \$ CA. Hors du Canada, Google Play '
                         'affiche le prix converti dans votre devise selon le '
                         'taux de change en vigueur.',
                         style: Theme.of(context).textTheme.bodySmall,
